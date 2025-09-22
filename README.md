@@ -1,8 +1,3 @@
-# Proyecto-1-Redes
-Aquí tienes el contenido listo para copiar y pegar en tu archivo `README.md`:
-
----
-
 # MCP para Búsqueda de Películas
 
 ## Componentes del proyecto
@@ -18,7 +13,7 @@ Aquí tienes el contenido listo para copiar y pegar en tu archivo `README.md`:
 - Cuenta en [TMDB](https://www.themoviedb.org/) (para la API key)
 - Cuenta en [Groq](https://groq.com/) (para la API key)
 
-## 🚀 Instalación y ejecución
+## Instalación y ejecución
 
 ### 1. Clonar o descargar los archivos
 ```bash

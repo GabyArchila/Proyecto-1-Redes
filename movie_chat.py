@@ -1,4 +1,3 @@
-import os
 import requests
 import json
 import groq
@@ -12,9 +11,9 @@ mensajes_historial = []
 class MovieMCPClient:
     def __init__(self, server_url="http://localhost:8000"):
         self.server_url = server_url
+        self.name = "Películas"
 
     def call_tool(self, tool_name: str, arguments: dict):
-        """Llamar a una herramienta del servidor MCP"""
         payload = {
             "jsonrpc": "2.0",
             "id": 1,
@@ -32,14 +31,24 @@ class MovieMCPClient:
                 headers={"Content-Type": "application/json"},
                 timeout=10
             )
-            return response.json()
+            self.log_interaction("REQUEST", payload)
+            result = response.json()
+            self.log_interaction("RESPONSE", result)
+            return result
         except Exception as e:
-            return {"error": str(e)}
+            error_result = {"error": str(e)}
+            self.log_interaction("ERROR", error_result)
+            return error_result
+
+    def log_interaction(self, type_msg, data):
+        with open("mcp_log.txt", "a", encoding="utf-8") as log_file:
+            log_file.write(f"[MOVIES MCP] {type_msg}: {json.dumps(data, indent=2, ensure_ascii=False)}\n\n")
 
 
 class ArxivMCPClient:
     def __init__(self, server_url="http://localhost:8001"):
         self.server_url = server_url
+        self.name = "ArXiv Papers"
 
     def call_tool(self, tool_name: str, arguments: dict):
         """Llamar a una herramienta del servidor arXiv MCP"""
@@ -60,15 +69,24 @@ class ArxivMCPClient:
                 headers={"Content-Type": "application/json"},
                 timeout=10
             )
-            return response.json()
+            self.log_interaction("REQUEST", payload)
+            result = response.json()
+            self.log_interaction("RESPONSE", result)
+            return result
         except Exception as e:
-            return {"error": str(e)}
+            error_result = {"error": str(e)}
+            self.log_interaction("ERROR", error_result)
+            return error_result
+
+    def log_interaction(self, type_msg, data):
+        with open("mcp_log.txt", "a", encoding="utf-8") as log_file:
+            log_file.write(f"[ARXIV MCP] {type_msg}: {json.dumps(data, indent=2, ensure_ascii=False)}\n\n")
 
 
 class RemoteUnitConverterClient:
-
     def __init__(self, server_url="https://unit-converter-mcp-304357449334.us-central1.run.app"):
         self.server_url = server_url
+        self.name = "Convertidor de Unidades"
 
     def call_tool(self, tool_name: str, arguments: dict):
         """Llamar a la herramienta remota de conversión de unidades"""
@@ -89,13 +107,45 @@ class RemoteUnitConverterClient:
                 headers={"Content-Type": "application/json"},
                 timeout=10
             )
-            return response.json()
+            self.log_interaction("REQUEST", payload)
+            result = response.json()
+            self.log_interaction("RESPONSE", result)
+            return result
         except Exception as e:
-            return {"error": str(e)}
+            error_result = {"error": str(e)}
+            self.log_interaction("ERROR", error_result)
+            return error_result
+
+    def log_interaction(self, type_msg, data):
+        with open("mcp_log.txt", "a", encoding="utf-8") as log_file:
+            log_file.write(f"[UNIT CONVERTER MCP] {type_msg}: {json.dumps(data, indent=2, ensure_ascii=False)}\n\n")
+
+
+def show_main_menu():
+    print("------------------------------- CHATBOT MULTI-MCP -------------------------------")
+    print("Selecciona el servidor MCP que deseas usar:")
+    print("1. Películas")
+    print("2. Artículos Académicos")
+    print("3. Convertidor de Unidades")
+    print("4. Conversación General (Sin MCP)")
+    print("5. Modo Multi-MCP (Detección automática)")
+    print("0. Salir")
+
+
+def extract_arxiv_query(user_input):
+    """Extraer términos de búsqueda para arXiv"""
+    stop_words = ['buscar', 'busca', 'encontrar', 'encuentra', 'arxiv', 'papers',
+                  'artículos', 'articulos', 'artículo', 'articulo', 'paper', 'sobre', 'de', 'acerca']
+
+    query = user_input.lower()
+    for word in stop_words:
+        query = query.replace(word, '')
+
+    query = ' '.join([word for word in query.split() if not word.isdigit()])
+    return query.strip() or "computer science"
 
 
 def handle_movie_query(user_input: str, movie_client):
-    """Manejar consultas sobre películas"""
     if 'buscar' in user_input.lower() or 'busca' in user_input.lower():
         title = user_input.lower().replace('buscar', '').replace('busca', '').strip()
         if title:
@@ -114,7 +164,6 @@ def handle_movie_query(user_input: str, movie_client):
                     for similar in movie['similar_movies']:
                         print(f"  - {similar['title']} ({similar.get('rating', 'N/A')}/10)")
                 print()
-
             else:
                 print("No pude encontrar información de esa película")
 
@@ -129,7 +178,6 @@ def handle_movie_query(user_input: str, movie_client):
             print(f"{movie.get('overview', 'Sin sinopsis')}\n")
         else:
             print("Error al obtener película aleatoria")
-
     else:
         print("Procesando consulta sobre películas...")
         mensajes_historial.append({"role": "user", "content": user_input})
@@ -143,39 +191,7 @@ def handle_movie_query(user_input: str, movie_client):
         print(f"{respuesta}")
 
 
-def extract_arxiv_query(user_input):
-    """Extraer términos de búsqueda para arXiv"""
-    stop_words = ['buscar', 'busca', 'encontrar', 'encuentra', 'arxiv', 'papers',
-                  'artículos', 'articulos', 'artículo', 'articulo', 'paper', 'sobre', 'de', 'acerca']
-
-    query = user_input.lower()
-    for word in stop_words:
-        query = query.replace(word, '')
-
-    # Remover números si son para cantidad
-    query = ' '.join([word for word in query.split() if not word.isdigit()])
-
-    return query.strip() or "computer science"
-
-
-def extract_paper_id(user_input):
-    """Extraer ID de paper para descargar"""
-    words = user_input.split()
-    for i, word in enumerate(words):
-        if word.lower() in ['paper', 'artículo', 'articulo', 'numero', 'number'] and i + 1 < len(words):
-            return words[i + 1]
-
-    # Buscar patrones de ID de arXiv
-    arxiv_pattern = r'\d+\.\d+(v\d+)?'
-    matches = re.findall(arxiv_pattern, user_input)
-    if matches:
-        return matches[0]
-
-    return None
-
-
 def handle_arxiv_query(user_input: str, arxiv_client):
-    """Manejar consultas sobre artículos académicos"""
     print("Buscando en arXiv...")
 
     # Extraer número de resultados si se especifica
@@ -211,7 +227,6 @@ def handle_arxiv_query(user_input: str, arxiv_client):
             print("No se pudieron obtener artículos de arXiv")
 
     elif 'importante' in user_input.lower() or 'relevante' in user_input.lower():
-        # Buscar papers importantes (por relevancia)
         query = extract_arxiv_query(user_input)
         result = arxiv_client.call_tool("search_arxiv", {
             "query": query,
@@ -229,7 +244,6 @@ def handle_arxiv_query(user_input: str, arxiv_client):
                 print()
         else:
             print("No se encontraron artículos relevantes")
-
     else:
         # Búsqueda general
         query = extract_arxiv_query(user_input)
@@ -254,7 +268,6 @@ def handle_arxiv_query(user_input: str, arxiv_client):
 
 
 def handle_unit_conversion(user_input: str, remote_client):
-    """Manejar conversión de unidades"""
     print("Conectando con servidor remoto...")
 
     # Extraer números del input
@@ -310,7 +323,7 @@ def handle_unit_conversion(user_input: str, remote_client):
 
 
 def handle_general_query(user_input: str):
-    """Manejar consultas generales"""
+    """Manejar consultas generales en modo multi"""
     print("Pensando...")
     mensajes_historial.append({"role": "user", "content": user_input})
     chat_completion = cliente_groq.chat.completions.create(
@@ -323,24 +336,122 @@ def handle_general_query(user_input: str):
     print(f"{respuesta}")
 
 
-def chat_con_multi_bot():
-    """Chat interactivo con integración MCP múltiple"""
-    movie_client = MovieMCPClient("http://localhost:8000")
-    arxiv_client = ArxivMCPClient("http://localhost:8001")
-    remote_client = RemoteUnitConverterClient("https://unit-converter-mcp-304357449334.us-central1.run.app")  # Cambiar por URL remota después
-
-    print("Bienvenido al Chatbot Multi-MCP")
-    print("Puedo ayudarte con:")
-    print("  • Películas: 'buscar inception', 'película aleatoria'")
-    print("  • Artículos académicos: 'buscar papers sobre IA', 'artículos recientes de física'")
-    print("  • Conversión de unidades: 'convertir 25 celsius a fahrenheit', '100 km a millas'")
-    print("  • Conversación general")
-    print("Escribe 'salir' para terminar la sesión\n")
+def handle_movie_queries(movie_client):
+    """Modo específico para consultas de películas"""
+    print(f"\n--- MODO: {movie_client.name} ---")
+    print("  Ejemplos '")
+    print("  • 'buscar inception' o '¿qué sabes de Inception?'")
+    print("  • 'película aleatoria' o 'recomiéndame algo'")
+    print("  • 'cuéntame de comedias' o cualquier pregunta sobre cine")
+    print("  • 'volver' - Regresar al menú principal")
+    print()
 
     while True:
-        user_input = input("Tu: ").strip()
+        user_input = input("Películas> ").strip()
 
-        if user_input.lower() in ['salir', 'exit', 'quit']:
+        if user_input.lower() == 'volver':
+            break
+
+        # Usar la función original que ya maneja conversación natural
+        handle_movie_query(user_input, movie_client)
+
+
+def handle_arxiv_queries(arxiv_client):
+    print(f"\n--- MODO: {arxiv_client.name} ---")
+    print("  Ejemplos '")
+    print("  • 'buscar papers sobre inteligencia artificial'")
+    print("  • '¿qué hay nuevo en física cuántica?'")
+    print("  • 'artículos recientes de machine learning'")
+    print("  • 'volver' - Regresar al menú principal")
+    print()
+
+    while True:
+        user_input = input("ArXiv> ").strip()
+
+        if user_input.lower() == 'volver':
+            break
+
+        # Usar la función original que maneja conversación natural
+        handle_arxiv_query(user_input, arxiv_client)
+
+
+def handle_unit_conversion_queries(unit_client):
+    print(f"\n--- MODO: {unit_client.name} ---")
+    print("  Ejemplos '")
+    print("  • 'convertir 25 celsius a fahrenheit'")
+    print("  • '¿cuánto son 100 kilómetros en millas?'")
+    print("  • 'necesito pasar 5 kilos a libras'")
+    print("  • 'volver' - Regresar al menú principal")
+    print("Unidades soportadas: celsius, fahrenheit, kelvin, meter, kilometer, mile, kilogram, libra")
+    print()
+
+    while True:
+        user_input = input("Conversión> ").strip()
+
+        if user_input.lower() == 'volver':
+            break
+
+        # Permitir cualquier pregunta natural sobre conversión
+        conversion_keywords = ['convertir', 'conversión', 'pasar', 'cuánto', 'celsius', 'fahrenheit',
+                               'metro', 'kilo', 'libra', 'milla', 'kilogramo', 'kilometro']
+
+        if any(keyword in user_input.lower() for keyword in conversion_keywords):
+            handle_unit_conversion(user_input, unit_client)
+        else:
+            # Si no detecta conversión, usar LLM general
+            print("Procesando consulta...")
+            mensajes_historial.append({"role": "user", "content": user_input})
+            chat_completion = cliente_groq.chat.completions.create(
+                messages=mensajes_historial,
+                model="llama-3.1-8b-instant",
+                temperature=0.7,
+            )
+            respuesta = chat_completion.choices[0].message.content
+            mensajes_historial.append({"role": "assistant", "content": respuesta})
+            print(f"{respuesta}")
+
+
+def handle_general_conversation():
+    print("\n--- MODO: Conversación General ---")
+    print("Escribe 'volver' para regresar al menú.")
+    print()
+
+    while True:
+        user_input = input("General> ").strip()
+
+        if user_input.lower() == 'volver':
+            break
+
+        print("Pensando...")
+        mensajes_historial.append({"role": "user", "content": user_input})
+        chat_completion = cliente_groq.chat.completions.create(
+            messages=mensajes_historial,
+            model="llama-3.1-8b-instant",
+            temperature=0.7,
+        )
+        respuesta = chat_completion.choices[0].message.content
+        mensajes_historial.append({"role": "assistant", "content": respuesta})
+        print(f"{respuesta}")
+
+
+def handle_multi_mcp_mode():
+    movie_client = MovieMCPClient("http://localhost:8000")
+    arxiv_client = ArxivMCPClient("http://localhost:8001")
+    remote_client = RemoteUnitConverterClient("https://unit-converter-mcp-304357449334.us-central1.run.app")
+
+    print("\n--- MODO: Multi-MCP (Detección Automática) ---")
+    print("Puedo detectar automáticamente qué tipo de consulta quieres hacer:")
+    print("  • Películas: 'buscar inception', 'película aleatoria'")
+    print("  • Papers: 'buscar papers sobre IA', 'artículos recientes'")
+    print("  • Conversiones: 'convertir 25 celsius a fahrenheit'")
+    print("  • General: cualquier otra consulta")
+    print("Escribe 'volver' para regresar al menú principal")
+    print()
+
+    while True:
+        user_input = input("Multi> ").strip()
+
+        if user_input.lower() == 'volver':
             break
 
         # Detectar tipo de consulta
@@ -367,5 +478,42 @@ def chat_con_multi_bot():
             handle_general_query(user_input)
 
 
+def main():
+    # Crear archivo de log
+    with open("mcp_log.txt", "w", encoding="utf-8") as log_file:
+        log_file.write("----------------MCP ---------------- \n\n")
+
+    # Inicializar clientes
+    movie_client = MovieMCPClient("http://localhost:8000")
+    arxiv_client = ArxivMCPClient("http://localhost:8001")
+    remote_client = RemoteUnitConverterClient("https://unit-converter-mcp-304357449334.us-central1.run.app")
+
+    while True:
+        show_main_menu()
+
+        try:
+            opcion = input("Selecciona una opción: ").strip()
+
+            if opcion == "1":
+                handle_movie_queries(movie_client)
+            elif opcion == "2":
+                handle_arxiv_queries(arxiv_client)
+            elif opcion == "3":
+                handle_unit_conversion_queries(remote_client)
+            elif opcion == "4":
+                handle_general_conversation()
+            elif opcion == "5":
+                handle_multi_mcp_mode()
+            elif opcion == "0":
+                print("¡Hasta luego!")
+                break
+            else:
+                print("Opción no válida. Por favor selecciona un número del 0 al 5.")
+
+        except KeyboardInterrupt:
+            print("\n¡Hasta luego!")
+            break
+
+
 if __name__ == "__main__":
-    chat_con_multi_bot()
+    main()
